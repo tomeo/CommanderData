@@ -3,7 +3,6 @@ from chatmessage import ChatMessage
 
 class DatetimeListener:
 	def call(self, message):
-		print message.message
 		if message.message == "!week":
 			message.done = True
 			return self.week()

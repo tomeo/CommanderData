@@ -13,9 +13,9 @@ from foodlistener import FoodListener
 from facebooklistener import FacebookListener
 from randomlistener import RandomListener
 from spotifylistener import SpotifyListener
-from datetime_listener import DatetimeListener
-from http_listener import HttpListener
-from fredrik import Fredrik
+from datetimelistener import DatetimeListener
+from httplistener import HttpListener
+from fredriklistener import FredrikListener
 
 # Register listeners
 listeners = [
@@ -28,11 +28,11 @@ listeners = [
 	FacebookListener(),
 	RandomListener(),
 	DatetimeListener(),
-	Fredrik(),
-	SpotifyListener()
+	FredrikListener(),
+	SpotifyListener(),
+	HttpListener()
 	]
 
-# HttpListener()
 # Fires on attachment status change. Here used to re-attach this script to Skype
 # in case attachment is lost.
 def OnAttach(status):

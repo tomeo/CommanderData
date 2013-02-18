@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-class Fredrik:
+class FredrikListener:
 	def call(self, message):
 		words = message.message.split()
 		if words[0] == "!fredrik":
