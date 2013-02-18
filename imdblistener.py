@@ -1,3 +1,5 @@
+import functions
+
 class ImdbListener:
 	def call(self, message):
 		words = message.message.split()
@@ -9,22 +11,20 @@ class ImdbListener:
 		return "http://www.imdb.com/find?q=" + term
 
 	def imdb_info(self, imdb_id):
-		parsed_data = functions.get_json("http://imdbapi.org/?id=" + imdb_id + "&type=json&plot=simple&episode=0&lang=en-US&aka=simple&release=simple&business=0&tech=0")
-		title_year = "%(title)s (%(year)s)" % parsed_data
-		runtime = 'Runtime: ' + ' ,'.join(parsed_data['runtime'])
-		directors = 'Directed by ' + ', '.join(parsed_data['directors'])
-		rating = "Rating: %(rating)s/10 (%(rating_count)s votes)" % parsed_data
-		plot = parsed_data['plot_simple']
-		genres = 'Genres: ' + ', '.join(parsed_data['genres'])
-		actors = 'Actors: ' + ', '.join(parsed_data['actors'])
-		poster = 'Poster: ' + parsed_data['poster']
-		trailer = 'Trailer: ' + imdb_url_trailer(imdb_id)
-		return "%s.\n%s.\n%s.\n%s.\n%s.\n%s.\n%s\n%s\n\n%s" % (title_year, runtime, rating, genres, directors, actors, poster, trailer, plot)
-
-	def imdb_url_trailer(self, imdb_id):
 		api_key = "71e4c2a503c7522113f43f9e04b23fe4"
 		imdb_xml = functions.get_markup('http://api.themoviedb.org/2.1/Movie.imdbLookup/en/xml/' + api_key + '/' + imdb_id)
-		tmbd_id = imdb_xml.find('url').text.split('/')[4]
+		title = imdb_xml.find('name').text
+		release = imdb_xml.find('released').text
+		runtime = imdb_xml.find('runtime').text
+		rating = imdb_xml.find('rating').text
+		plot = imdb_xml.find('overview').text
+		return "%s (%s, %s min, %s/10)\n%s." % (title, release, runtime, rating, plot)
 
-		tmbd_xml = functions.get_markup('http://api.themoviedb.org/2.1/Movie.getInfo/en/xml/' + api_key + '/' + tmbd_id)
-		return tmbd_xml.find('trailer').text
+	# TODO: Printing trailer url fires title-fetch :(
+	# def imdb_url_trailer(self, imdb_id):
+	# 	api_key = "71e4c2a503c7522113f43f9e04b23fe4"
+	# 	imdb_xml = functions.get_markup('http://api.themoviedb.org/2.1/Movie.imdbLookup/en/xml/' + api_key + '/' + imdb_id)
+	# 	tmbd_id = imdb_xml.find('url').text.split('/')[4]
+
+	# 	tmbd_xml = functions.get_markup('http://api.themoviedb.org/2.1/Movie.getInfo/en/xml/' + api_key + '/' + tmbd_id)
+	# 	return tmbd_xml.find('trailer').text
