@@ -16,6 +16,7 @@ from spotifylistener import SpotifyListener
 from datetimelistener import DatetimeListener
 from httplistener import HttpListener
 from fredriklistener import FredrikListener
+from soccerlistener import SoccerListener
 
 # Register listeners
 listeners = [
@@ -29,6 +30,7 @@ listeners = [
 	RandomListener(),
 	DatetimeListener(),
 	FredrikListener(),
+	SoccerListener(),
 	SpotifyListener(),
 	HttpListener()
 	]
