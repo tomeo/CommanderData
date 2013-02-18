@@ -6,5 +6,5 @@ class SoccerListener:
 			return "Menade du !fuskboll?"
 		elif words[0] == "!fuskboll":
 			message.done = True
-			return "http://www.youtube.com/watch?v=VzeKiEtp0m0"
+			return "http://www.youtube.com/watch?v=IHVTYNGS-F4"
 
