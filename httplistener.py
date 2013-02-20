@@ -12,16 +12,26 @@ class HttpListener:
 			if self.hostname(urls[0]) == "open.spotify.com":
 				message.done = True
 				return self.spotify_url(urls[0])
-			elif self.hostname(urls[0]) == "www.imdb.com":
+			elif self.hostname(urls[0]) == "imdb.com":
 				message.done = True
 				return self.imdb_url(urls[0])
+			elif self.hostname(urls[0]) == "i.imgur.com":
+				title = self.imgur_url(urls[0])
+				if title is not None:
+					message.done = True
+					return title
+			elif self.hostname(urls[0]) == "i.qkme.me":
+				title = self.qkme_url(urls[0])
+				if title is not None:
+					message.done = True
+					return title
 			title = self.web_title(urls[0]) 
 			if title is not None:
 				message.done = True
 				return title
 
 	def hostname(self, url):
-		return urlparse.urlparse(url).hostname
+		return urlparse.urlparse(url.replace("www.", "")).hostname
 
 	def spotify_url(self, url):
 		spotify_listener = SpotifyListener()
@@ -31,9 +41,19 @@ class HttpListener:
 		imdb_listener = ImdbListener()
 		return imdb_listener.imdb_info(url.split('/')[4])
 
+	def imgur_url(self, url):
+		soup = functions.get_markup(url.replace("i.", "").replace(".jpg", ""))
+		if hasattr(soup.title, 'string'):
+			return functions.convert_html_entities(soup.title.string)
+		return None
+
+	def qkme_url(self, url):
+		soup = functions.get_markup(url.replace("i.", "").replace(".jpg", ""))
+		if hasattr(soup.title, 'string'):
+			return functions.convert_html_entities(soup.title.string)	
+
 	def web_title(self, url):
 		soup = functions.get_markup(url)
 		if hasattr(soup.title, 'string'):
 			return functions.convert_html_entities(soup.title.string)
-		else:
-			return None
+		return None
