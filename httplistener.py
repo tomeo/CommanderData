@@ -9,12 +9,16 @@ class HttpListener:
 	def call(self, message):
 		urls = re.findall('http[s]?://(?:[a-zA-Z]|[0-9]|[$-_@.&+]|[!*\(\),]|(?:%[0-9a-fA-F][0-9a-fA-F]))+', message.message)
 		if len(urls) > 0:
-			message.done = True
 			if self.hostname(urls[0]) == "open.spotify.com":
+				message.done = True
 				return self.spotify_url(urls[0])
 			elif self.hostname(urls[0]) == "www.imdb.com":
+				message.done = True
 				return self.imdb_url(urls[0])
-			return self.web_title(urls[0])
+			title = self.web_title(urls[0]) 
+			if title is not None:
+				message.done = True
+				return title
 
 	def hostname(self, url):
 		return urlparse.urlparse(url).hostname
@@ -29,4 +33,7 @@ class HttpListener:
 
 	def web_title(self, url):
 		soup = functions.get_markup(url)
-		return functions.convert_html_entities(soup.title.string)
+		if hasattr(soup.title, 'string'):
+			return functions.convert_html_entities(soup.title.string)
+		else:
+			return None
