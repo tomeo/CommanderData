@@ -52,7 +52,7 @@ def OnMessageStatus(Message, Status):
 		for listener in listeners:
 			result = listener.call(currentMessage)
 			if currentMessage.done:
-				Message.Chat.SendMessage(result)
+				Message.Chat.SendMessage("<bot> " + result.strip())
 				break
 
 skype = Skype4Py.Skype()

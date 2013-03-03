@@ -12,15 +12,15 @@ class SpotifyListener:
 		xml = functions.get_markup('http://ws.spotify.com/lookup/1/?uri=spotify:' + ':'.join(uri))
 		name = xml.findAll('name')
 		if not isHttp:
-			http = 'http://open.spotify.com/' + uri[0] + '/' + uri[1]
+			http = '\nhttp://open.spotify.com/' + uri[0] + '/' + uri[1]
 		else:
 			http = ""
 		
 		if uri[0] == "track":
-			artist = 'Artist: ' + name[1].string + '\n'
-			title = 'Title: ' + name[0].string + '\n'
-			album = 'Album: ' + name[2].string + '\n'
-			return artist + title + album + http
+			artist = name[1].string
+			title = name[0].string
+			album = name[2].string
+			return artist + " - "  + title + " (" + album + ")" + http
 		
 		if uri[0] == "album":
 			artist = 'Artist: ' + name[1].string + '\n'
