@@ -1,0 +1,4 @@
+#!/bin/bash
+export VERSIONER_PYTHON_VERSION=2.6;
+export VERSIONER_PYTHON_PREFER_32_BIT=yes
+python CommanderData.py

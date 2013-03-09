@@ -48,6 +48,8 @@ def OnAttach(status):
 # Status: UNKNOWN, SENDING, SENT, RECIEVED, READ
 def OnMessageStatus(Message, Status):
 	if Status == 'SENT' or Status == 'RECEIVED':
+		print "# Message"
+		print Message.FromDisplayName + ": " + Message.Body
 		currentMessage = ChatMessage(Message.Body)
 		for listener in listeners:
 			result = listener.call(currentMessage)
