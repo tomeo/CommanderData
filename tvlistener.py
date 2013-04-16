@@ -18,8 +18,9 @@ class TvListener:
 		shows = []
 		for show in xml.findAll('item'):
 			show_date = datetime.strptime(show.pubdate.string[:-6], '%a, %d %b %Y %H:%M:%S')
-			if show_date.date() >= datetime.now().date() - timedelta(1):
+			if show_date.date() >= datetime.now().date() - timedelta(1) and not show.title.string.startswith("HD 720p:"):
 				shows.append(show.title.string)
+		shows.sort()
 		return '\n'.join(shows)
 
 	def tv(self, show):

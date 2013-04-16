@@ -49,8 +49,8 @@ def OnAttach(status):
 def OnMessageStatus(Message, Status):
 	if Status == 'SENT' or Status == 'RECEIVED':
 		print "# Message"
-		print Message.FromDisplayName + ": " + Message.Body
-		currentMessage = ChatMessage(Message.Body)
+		print Message.FromDisplayName + " (" + Message.FromHandle + "): " + Message.Body
+		currentMessage = ChatMessage(Message.Body, Message.FromHandle)
 		for listener in listeners:
 			result = listener.call(currentMessage)
 			if currentMessage.done:
