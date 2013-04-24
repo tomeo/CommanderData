@@ -17,6 +17,7 @@ from datetimelistener import DatetimeListener
 from httplistener import HttpListener
 from fredriklistener import FredrikListener
 from soccerlistener import SoccerListener
+from thetvdblistener import TheTVDBListener
 
 # Register listeners
 listeners = [
@@ -32,6 +33,7 @@ listeners = [
 	FredrikListener(),
 	SoccerListener(),
 	SpotifyListener(),
+	TheTVDBListener(),
 	HttpListener()
 	]
 
