@@ -2,20 +2,115 @@ import urllib2
 import urllib
 from xml.etree import ElementTree
 from random import choice
-from datetime import date
+import datetime
+from database import Base, Session
+from sqlalchemy import Column, Integer, String, Date, ForeignKey, Table
+from sqlalchemy.orm import relationship, backref
+from sqlalchemy.orm.exc import NoResultFound
 
-class TheTVDBEpisode:
+class TheTVDBSeries(Base):
+    __tablename__ = 'thetvdb_series'
 
-    def __init__(self, ep_id, series_name, season, episode, aired_date, name=""):
-        self.ep_id = ep_id
-        self.series_name = series_name
+    series_id = Column(String, primary_key=True)
+    name = Column(String)
+    status = Column(String)
+    updated = Column(Integer)
+
+    series_url = '%(mirror)s/api/%(apikey)s/series/%(series_id)s/all/en.xml'
+    series_only_url = '%(mirror)s/api/%(apikey)s/series/%(series_id)s/en.xml'
+    episode_url = '%(mirror)s/api/%(apikey)s/series/%(series_id)s/default/%(season)s/%(episode)s/en.xml'
+
+    def __init__(self, series_id, name='', updated=0, status=None):
+        self.series_id = series_id
+        self.name = name
+        self.updated = updated
+        self.status = status
+        self.episodes = []
+
+    def _update_all(self, mirror, apikey, session):
+
+        ser_xml = urllib2.urlopen(self.series_only_url %
+                {   'mirror' : mirror,
+                    'apikey' : apikey,
+                    'series_id' : self.series_id})
+        ser_tree = ElementTree.fromstring(ser_xml.read().rstrip('\r'))
+
+        series_tag = ser_tree.find('Series')
+        update_time = int(series_tag.find('lastupdated').text)
+        if self.updated >= update_time:
+            return
+        self.updated = update_time
+        self.status = series_tag.find('Status').text
+        self.name = series_tag.find('SeriesName').text
+
+        all_xml = urllib2.urlopen(self.series_url %
+                {   'mirror' : mirror,
+                    'apikey' : apikey,
+                    'series_id' : self.series_id})
+        all_tree = ElementTree.fromstring(all_xml.read().rstrip('\r'))
+
+        for ep_tag in all_tree.iter('Episode'):
+            if int(ep_tag.find('SeasonNumber').text) == 0:
+                continue
+            (year, month, day) = [int(num) for num in
+                    ep_tag.find('FirstAired').text.split('-')]
+            ep_date = datetime.date(year, month, day)
+            ep_updated = int(ep_tag.find('lastupdated').text)
+            try:
+                ep = session.query(TheTVDBEpisode).\
+                        filter(TheTVDBEpisode.episode_id ==\
+                            ep_tag.find('id').text).\
+                        one()
+            except NoResultFound, e:
+                ep = TheTVDBEpisode(
+                    ep_tag.find('id').text,
+                    self.series_id,
+                    int(ep_tag.find('SeasonNumber').text),
+                    int(ep_tag.find('EpisodeNumber').text),
+                    ep_date,
+                    ep_updated,
+                    ep_tag.find('EpisodeName').text)
+                self.episodes.append(ep)
+            if ep.updated < ep_updated:
+                ep.aired = ep_date
+                ep.name = ep_tag.find('EpisodeName').text
+        session.add(self)
+        session.commit()
+
+
+    def get_last_episode(self, mirror, apikey, session):
+        self._update_all(mirror, apikey, session)
+        today = datetime.date.today()
+        return session.query(TheTVDBEpisode).\
+                join(TheTVDBEpisode.series).\
+                filter(TheTVDBEpisode.series == self).\
+                filter(TheTVDBEpisode.aired < today).\
+                order_by(TheTVDBEpisode.aired.desc()).first()
+
+class TheTVDBEpisode(Base):
+
+    __tablename__ = 'thetvdb_episodes'
+
+    episode_id = Column(Integer, primary_key=True)
+    series_id = Column(String, ForeignKey(TheTVDBSeries.series_id))
+    season = Column(Integer)
+    episode = Column(Integer)
+    aired = Column(Date)
+    updated = Column(Integer)
+
+    series = relationship(TheTVDBSeries, backref=backref('episodes'))
+
+    def __init__(self, ep_id, series_id, season, episode, aired_date, updated,
+            name=""):
+        self.episode_id = ep_id
+        self.series_id = series_id
         self.season = season
         self.episode = episode
-        self.aired_date = aired_date
+        self.aired = aired_date
         self.name = name
 
     def __eq__(self, other):
-        return self.ep_id == other.ep_id
+        return self.episode_id == other.episode_id
 
     def __ne__(self, other):
         return not self.__eq__(other)
@@ -33,86 +128,50 @@ class TheTVDBEpisode:
             return self.season < other.season
 
     def __str__(self):
-        return '%s, S%02dE%02d, %s' % (self.series_name, self.season,
-                self.episode, self.aired_date)
+        return '%s, S%02dE%02d, %s' % (self.series.name, self.season,
+                self.episode, self.aired)
 
-class TheTVDBSeries:
+class TheTVDBAccount(Base):
 
-    series_url = '%(mirror)s/api/%(apikey)s/series/%(series_id)s/all/en.xml'
+    __tablename__ = 'thetvdb_accounts'
 
-    def __init__(self, series_id, name=''):
-        self.series_id = series_id
-        self.name = name
-        self.episodes = []
-
-    def _update_all(self, mirror, apikey, history=1, future=1):
-        all_xml = urllib2.urlopen(self.series_url %
-                {   'mirror' : mirror,
-                    'apikey' : apikey,
-                    'series_id' : self.series_id})
-        all_tree = ElementTree.fromstring(all_xml.read().rstrip('\r'))
-        self.name = all_tree.find('Series').find('SeriesName').text
-        last_episode_tag = None
-        last_date = None
-        future_episode = None
-        future_date = None
-        today = date.today()
-        for ep_tag in all_tree.findall('Episode'):
-            date_tag = ep_tag.find('FirstAired')
-            if date_tag.text is None:
-                print("error: %s" % self.name)
-                continue
-            (year, month, day) = date_tag.text.split('-')
-            ep_date = date(int(year), int(month), int(day))
-            if today > ep_date and (last_date is None or ep_date > last_date):
-                last_date = ep_date
-                last_episode_tag = ep_tag
-            elif today <= ep_date and (future_date is None or ep_date < future_date):
-                future_date = ep_date
-                future_episode_tag = ep_tag
-        self.episodes.append(TheTVDBEpisode(
-            last_episode_tag.find('id').text,
-            all_tree.find('Series').find('SeriesName').text,
-            int(last_episode_tag.find('SeasonNumber').text),
-            int(last_episode_tag.find('EpisodeNumber').text),
-            last_date,
-            last_episode_tag.find('EpisodeName').text))
-
-    def get_last_episode(self, mirror, apikey):
-        self._update_all(mirror, apikey)
-        today = date.today()
-        for ep in self.episodes:
-            if ep.aired_date < today:
-                return ep
-        return None
-
-class TheTVDBAccount:
+    name = Column(String, primary_key=True)
+    account_id = Column(String)
+    series = relationship(TheTVDBSeries, backref=backref('favorite_of'),
+            secondary=Table('thetvdb_favorites', Base.metadata,
+                Column('account_id', String,
+                    ForeignKey('%s.account_id' % __tablename__)),
+                Column('series_id', String,
+                    ForeignKey(TheTVDBSeries.series_id))
+                ))
 
     favorite_url = '%(mirror)s/api/User_Favorites.php?accountid=%(account_id)s'
 
     def __init__(self, name, account_id):
         self.name = name
         self.account_id = account_id
-        self.favorite_ids = set([])
         self.series = []
 
-    def _refresh_favorites(self, mirror):
+    def _refresh_favorites(self, mirror, session):
         fav_xml = urllib2.urlopen(self.favorite_url %
                 {   'mirror' : mirror,
                     'account_id' : self.account_id})
         fav_tree = ElementTree.fromstring(fav_xml.read().rstrip('\r'))
-        fav_ids = set([tag.text for tag in fav_tree.findall('Series')])
-        new_fav_ids = fav_ids - self.favorite_ids
-        for fav_id in new_fav_ids:
-            self.series.append(TheTVDBSeries(fav_id))
+        fav_ids = set([tag.text for tag in fav_tree.iter('Series')])
+        for fav_id in fav_ids - set([s.series_id for s in self.series]):
+            print("ACCOUNT: found new favorite %s" % fav_id)
+            try:
+                self.series.append(session.query(TheTVDBSeries).\
+                        filter(TheTVDBSeries.series_id == fav_id).one())
+            except NoResultFound, e:
+                ser = TheTVDBSeries(fav_id)
+                self.series.append(ser)
+                session.add(ser)
+                session.commit()
 
-    def get_last_episodes(self, mirror, apikey):
-        self._refresh_favorites(mirror)
-        eps = []
-        for s in self.series:
-            eps.append(s.get_last_episode(mirror, apikey))
-        return eps
-
+    def get_last_episodes(self, mirror, apikey, session):
+        self._refresh_favorites(mirror, session)
+        return [s.get_last_episode(mirror, apikey, session) for s in self.series]
 
 class TheTVDBListener:
 
@@ -134,6 +193,9 @@ class TheTVDBListener:
             if int(mirror_tag.find('typemask').text) % 2 == 1:
                 self.mirrors.append(mirror_tag.find('mirrorpath').text)
         self.accounts = {}
+        self.session = Session()
+        for acc in self.session.query(TheTVDBAccount).all():
+            self.accounts[acc.name] = acc
 
     def call(self, msg):
         cmd = msg.message.split()
@@ -168,17 +230,13 @@ class TheTVDBListener:
         if len(cmd) < 1:
             res = 'Missing account id'
         elif msg.fromhandle in self.accounts:
-            if self.accounts[msg.fromhandle].account_id == cmd[0]:
-                res = 'Already registered'
-            else:
-                old_id = self.accounts[msg.fromhandle].account_id
-                self.accounts[msg.fromhandle] =\
-                        TheTVDBAccount(msg.fromhandle, cmd[0])
-                res = 'Changed account id from %s to %s' %\
-                        (old_id, self.accounts[msg.fromhandle].account_id)
+            res = 'Already registered the account %s'\
+                    'Use !thetvdb deregister to remove your account'\
+                    'before trying to register a new' %\
+                    self.accounts[msg.fromhandle].account_id
         else:
             self.accounts[msg.fromhandle] =\
-                    TheTVDBAccount(msg.fromhandle, cmd[0])
+                    TheTVDBAccount(str(msg.fromhandle), str(cmd[0]))
             res = 'Registered new account with id %s' % cmd[0]
         return res
 
@@ -186,14 +244,29 @@ class TheTVDBListener:
         if not msg.fromhandle in self.accounts:
             return "Please register a thetvdb account id first\n!thetvdb register <account_id>"
         last_episodes = self.accounts[msg.fromhandle].get_last_episodes(
-                choice(self.mirrors), self.apikey)
+                choice(self.mirrors), self.apikey, self.session)
         return '\n'.join([ep.__str__() for ep in last_episodes])
+
+    def save(self):
+        self.session.add_all(self.accounts.values())
+        self.session.commit()
 
 if __name__ == '__main__':
     from chatmessage import ChatMessage
     msg_reg = ChatMessage('!thetvdb register 676E7F53485976AB', 'oscar')
     msg_rec = ChatMessage('!thetvdb recent', 'oscar')
     tvdb = TheTVDBListener()
+    session = Session()
+    Base.metadata.create_all(session.connection())
     print(tvdb.call(msg_reg))
     print(tvdb.call(msg_rec))
+    print(tvdb.call(msg_rec))
+    #acc = TheTVDBAccount('osse_olsson', 'my_id')
+    #session.add(acc)
+    #session.commit()
+    #tvdb.save()
+    #print(tvdb.call(msg_rec))
+    #ep = TheTVDBEpisode(1, 'test series', 1, 2, date(2012, 1, 2))
+    #session.add(ep)
+    #session.commit()
 
