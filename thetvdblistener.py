@@ -8,6 +8,8 @@ from sqlalchemy import Column, Integer, String, Date, ForeignKey, Table
 from sqlalchemy.orm import relationship, backref
 from sqlalchemy.orm.exc import NoResultFound
 
+from twisted.internet import defer, reactor, threads
+
 class TheTVDBSeries(Base):
     __tablename__ = 'thetvdb_series'
 
@@ -38,6 +40,7 @@ class TheTVDBSeries(Base):
         series_tag = ser_tree.find('Series')
         update_time = int(series_tag.find('lastupdated').text)
         if self.updated >= update_time:
+            print("No need to update %s" % self.name)
             return
         self.updated = update_time
         self.status = series_tag.find('Status').text
@@ -61,6 +64,9 @@ class TheTVDBSeries(Base):
                         filter(TheTVDBEpisode.episode_id ==\
                             ep_tag.find('id').text).\
                         one()
+                if ep.updated < ep_updated:
+                    ep.aired = ep_date
+                    ep.name = ep_tag.find('EpisodeName').text
             except NoResultFound, e:
                 ep = TheTVDBEpisode(
                     ep_tag.find('id').text,
@@ -71,9 +77,6 @@ class TheTVDBSeries(Base):
                     ep_updated,
                     ep_tag.find('EpisodeName').text)
                 self.episodes.append(ep)
-            if ep.updated < ep_updated:
-                ep.aired = ep_date
-                ep.name = ep_tag.find('EpisodeName').text
         session.add(self)
         session.commit()
 
@@ -173,6 +176,16 @@ class TheTVDBAccount(Base):
         self._refresh_favorites(mirror, session)
         return [s.get_last_episode(mirror, apikey, session) for s in self.series]
 
+    def get_last_episodes_async(self, mirror, apikey, session):
+        def _after_refresh(res):
+            return DeferedList(
+                    [threads.deferToThread(
+                        s.get_last_episode, mirror, apikey, session)\
+                            for s in self.series])
+        d = threads.deferToThread(self._refresh_favorites, mirror, session)
+        d.addCallback(_after_refresh)
+        return d
+
 class TheTVDBListener:
 
     apikey = '559A94F235A8EA20'
@@ -247,6 +260,15 @@ class TheTVDBListener:
                 choice(self.mirrors), self.apikey, self.session)
         return '\n'.join([ep.__str__() for ep in last_episodes])
 
+    def recent_async(self, cmd, msg):
+        if not msg.fromhandle in self.accounts:
+            return "Please register a thetvdb account id first\n!thetvdb register <account_id>"
+        d = self.accounts[msg.fromhandle].get_last_episodes_async(
+                choice(self.mirrors), self.apikey, self.session)
+        d.addCallback(lambda eps:
+                '\n'.join([ep.__str__() for ep in last_episodes]))
+        return d
+
     def save(self):
         self.session.add_all(self.accounts.values())
         self.session.commit()
@@ -256,11 +278,16 @@ if __name__ == '__main__':
     msg_reg = ChatMessage('!thetvdb register 676E7F53485976AB', 'oscar')
     msg_rec = ChatMessage('!thetvdb recent', 'oscar')
     tvdb = TheTVDBListener()
-    session = Session()
-    Base.metadata.create_all(session.connection())
+    def _print(res):
+        print(res)
     print(tvdb.call(msg_reg))
-    print(tvdb.call(msg_rec))
-    print(tvdb.call(msg_rec))
+    tvdb.recent_async('', msg_rec).addCallback(_print)
+    reactor.run()
+    #session = Session()
+    #Base.metadata.create_all(session.connection())
+    #print(tvdb.call(msg_reg))
+    #print(tvdb.call(msg_rec))
+    #print(tvdb.call(msg_rec))
     #acc = TheTVDBAccount('osse_olsson', 'my_id')
     #session.add(acc)
     #session.commit()
